@@ -21,8 +21,9 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+// Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5174',
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Portu 5173 olarak düzeltin
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -182,14 +183,14 @@ async function createTables() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )`,
     
-    `CREATE TABLE IF NOT EXISTS services (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(100) NOT NULL,
-      description TEXT,
-      default_price DECIMAL(10,2),
-      is_active BOOLEAN DEFAULT TRUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )`,
+   `CREATE TABLE IF NOT EXISTS services (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  default_price DECIMAL(10,2),
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)`
     
     `CREATE TABLE IF NOT EXISTS customers (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -404,25 +405,32 @@ async function createTables() {
   }
 
   // Insert default services
-  const defaultServices = [
-    ['Web Tasarım', 'Modern ve responsive web sitesi tasarımı', 5000.00],
-    ['Sosyal Medya Yönetimi', 'Sosyal medya hesaplarının profesyonel yönetimi', 2000.00],
-    ['SEO', 'Arama motoru optimizasyonu hizmetleri', 3000.00],
-    ['E-Ticaret', 'E-ticaret sitesi kurulumu ve yönetimi', 8000.00],
-    ['Grafik Tasarım', 'Profesyonel grafik tasarım hizmetleri', 1500.00],
-    ['Logo Tasarım', 'Kurumsal kimlik ve logo tasarımı', 1000.00],
-    ['Google Reklam', 'Google Ads kampanya yönetimi', 2500.00],
-    ['Meta Reklam', 'Facebook ve Instagram reklam yönetimi', 2500.00],
-    ['Marka Danışmanlığı', 'Marka stratejisi ve danışmanlık hizmetleri', 4000.00]
-  ];
+ // Insert default services only if the table is empty
+  const [servicesExist] = await db.execute('SELECT COUNT(*) as count FROM services');
 
-  for (const service of defaultServices) {
-    await db.execute(
-      'INSERT IGNORE INTO services (name, description, default_price) VALUES (?, ?, ?)',
-      service
-    );
+  if (servicesExist[0].count === 0) {
+    console.log('Hizmetler tablosu boş, varsayılan hizmetler ekleniyor...');
+    
+    const defaultServices = [
+      ['Web Tasarım', 'Modern ve responsive web sitesi tasarımı', 5000.00],
+      ['Sosyal Medya Yönetimi', 'Sosyal medya hesaplarının profesyonel yönetimi', 2000.00],
+      ['SEO', 'Arama motoru optimizasyonu hizmetleri', 3000.00],
+      ['E-Ticaret', 'E-ticaret sitesi kurulumu ve yönetimi', 8000.00],
+      ['Grafik Tasarım', 'Profesyonel grafik tasarım hizmetleri', 1500.00],
+      ['Logo Tasarım', 'Kurumsal kimlik ve logo tasarımı', 1000.00],
+      ['Google Reklam', 'Google Ads kampanya yönetimi', 2500.00],
+      ['Meta Reklam', 'Facebook ve Instagram reklam yönetimi', 2500.00],
+      ['Marka Danışmanlığı', 'Marka stratejisi ve danışmanlık hizmetleri', 4000.00]
+    ];
+
+    for (const service of defaultServices) {
+      await db.execute(
+        'INSERT INTO services (name, description, default_price) VALUES (?, ?, ?)',
+        service
+      );
+    }
+    console.log('Varsayılan hizmetler başarıyla eklendi.');
   }
-
   // Insert default WhatsApp templates
   const defaultTemplates = [
     ['İlk Temas', 'first_contact', 'Merhaba! {customer_name}, dijital ajansımız hakkında bilgi almak istediğinizi öğrendik. Size nasıl yardımcı olabiliriz?'],
@@ -499,20 +507,24 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
+    if (!email || !password) {
+        return res.status(400).json({ error: 'E-posta ve şifre gerekli.' });
+    }
+    
     const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
     if (users.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Geçersiz kullanıcı bilgileri' });
     }
 
     const user = users[0];
     const isValidPassword = await bcrypt.compare(password, user.password);
     
     if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Geçersiz kullanıcı bilgileri' });
     }
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user.id, email: user.email, role: user.role, username: user.username },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -528,7 +540,8 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Login error:", error);
+    res.status(500).json({ error: 'Sunucu hatası oluştu.' });
   }
 });
 
@@ -544,7 +557,7 @@ app.post('/api/auth/register', async (req, res) => {
     );
 
     const token = jwt.sign(
-      { id: result.insertId, email, role: 'user' },
+      { id: result.insertId, email, role: 'user', username: username },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
@@ -560,12 +573,14 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      res.status(400).json({ error: 'User already exists' });
+      res.status(400).json({ error: 'Bu e-posta adresi zaten kayıtlı.' });
     } else {
-      res.status(500).json({ error: error.message });
+      console.error("Register error:", error);
+      res.status(500).json({ error: 'Kayıt sırasında bir hata oluştu.' });
     }
   }
 });
+
 
 // SERVICES ROUTES
 app.get('/api/services', authenticateToken, async (req, res) => {
@@ -1493,22 +1508,65 @@ app.post('/api/customers/:customerId/upload-audio', authenticateToken, upload.si
     const userId = req.user.id;
 
     if (!req.file) {
-      return res.status(400).json({ error: 'Ses dosyası sağlanmadı' });
+      return res.status(400).json({ error: 'Ses dosyası sağlanmadı.' });
+    }
+
+    if (!global.openai) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'OpenAI entegrasyonu yapılandırılmamış. Lütfen Yönetim Panelini kontrol edin.' });
     }
 
     let transcribedText = '';
     
-    if (global.openai) {
-      try {
-        const transcription = await global.openai.audio.transcriptions.create({
-          file: fs.createReadStream(req.file.path),
-          model: 'whisper-1',
-          language: 'tr'
-        });
-        transcribedText = transcription.text;
-      } catch (error) {
-        console.log('Transcription failed:', error.message);
-      }
+    try {
+      console.log(`Transkripsiyon başlatılıyor: ${req.file.path}`);
+      const transcription = await global.openai.audio.transcriptions.create({
+        file: fs.createReadStream(req.file.path),
+        model: 'whisper-1',
+        language: 'tr'
+      });
+      transcribedText = transcription.text;
+      console.log('Transkripsiyon başarılı.');
+    } catch (transcriptionError) {
+      console.error('OpenAI Transkripsiyon Hatası:', transcriptionError);
+      fs.unlinkSync(req.file.path);
+      return res.status(500).json({ error: `OpenAI Transkript Hatası: ${transcriptionError.message}` });
+    }
+    
+    // Başarılı transkripsiyondan sonra dosyayı sil
+    fs.unlinkSync(req.file.path);
+
+    // Notu veritabanına kaydet
+    const [result] = await db.execute(
+      'INSERT INTO notes (customer_id, user_id, content, type, is_transcribed) VALUES (?, ?, ?, ?, ?)',
+      [customerId, userId, transcribedText, 'audio', true]
+    );
+    const newNoteId = result.insertId;
+
+    // Müşterinin son etkileşim zamanını güncelle
+    await db.execute(
+      'UPDATE customers SET last_interaction = CURRENT_TIMESTAMP WHERE id = ?',
+      [customerId]
+    );
+
+    // Yeni oluşturulan notun temel bilgilerini geri döndür
+    const [note] = await db.execute(`
+      SELECT n.*, u.username as author_name
+      FROM notes n
+      LEFT JOIN users u ON n.user_id = u.id
+      WHERE n.id = ?
+    `, [newNoteId]);
+
+    res.status(201).json(note[0]);
+  } catch (error) {
+    // Genel hataları yakala ve yüklenen dosyayı sil
+    if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+    }
+    console.error("Genel ses yükleme hatası:", error);
+    res.status(500).json({ error: error.message });
+  }
+});}
     }
 
     // Save note with audio file
@@ -1535,6 +1593,9 @@ app.post('/api/customers/:customerId/upload-audio', authenticateToken, upload.si
     res.status(500).json({ error: error.message });
   }
 });
+
+
+
 
 // DATA EXPORT/IMPORT
 app.get('/api/export/:type', authenticateToken, async (req, res) => {
@@ -1659,10 +1720,15 @@ app.use((error, req, res, next) => {
 });
 
 // Start server
+// ...
+// ... diğer tüm kodlarınız
+// ...
+
 initializeDB().then(() => {
   app.listen(PORT, () => {
     console.log(`🚀 Agency CRM Server running on port ${PORT}`);
-    console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5174'}`);
+    console.log(`✅ CORS İzni Verilen Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
     console.log(`🗄️  Database: ${dbConfig.host}:3306/${dbConfig.database}`);
   });
+    });
 });
