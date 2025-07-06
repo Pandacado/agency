@@ -148,7 +148,8 @@ export const AIMusteriUzmani: React.FC = () => {
                   <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Stratejik Yol Haritası</h3>
               </div>
               <div className="space-y-4">
-                {analysisResult.roadmap.map(item => (
+                {(analysisResult?.roadmap || []).map((item) => (
+
                   <div key={item.step} className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                       <div className="flex items-center">
                           <CheckCircle className="h-6 w-6 text-pink-500 mr-3" />

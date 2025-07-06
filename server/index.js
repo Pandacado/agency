@@ -190,7 +190,7 @@ async function createTables() {
   default_price DECIMAL(10,2),
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)`
+)`,
     
     `CREATE TABLE IF NOT EXISTS customers (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1475,33 +1475,63 @@ app.post('/api/ai/generate-message', authenticateToken, async (req, res) => {
   }
 });
 
-// TRANSCRIPTION ROUTE
-app.post('/api/transcribe', authenticateToken, upload.single('audio'), async (req, res) => {
+/// AI ANALIZ
+app.post('/api/ai/customer-expert-analysis', authenticateToken, async (req, res) => {
   try {
-    if (!global.openai) {
-      return res.status(400).json({ error: 'OpenAI entegrasyonu yapılandırılmamış' });
-    }
+    const { customerId } = req.body;
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'Ses dosyası sağlanmadı' });
-    }
+    const [notes] = await db.execute(`
+      SELECT content FROM notes WHERE customer_id = ? ORDER BY created_at DESC LIMIT 10
+    `, [customerId]);
 
-    const transcription = await global.openai.audio.transcriptions.create({
-      file: fs.createReadStream(req.file.path),
-      model: 'whisper-1',
-      language: 'tr'
+    const combinedNotes = notes.map(n => n.content).join('\n');
+
+    const completion = await global.openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `Sen bir CRM müşteri uzmanısın. Aşağıdaki müşteri notlarını analiz et. JSON formatında aşağıdaki yapıyı döndür:
+
+{
+  "analysis": "Genel müşteri analizi açıklaması...",
+  "roadmap": [
+    {
+      "step": 1,
+      "action": "Atılması gereken adım",
+      "reason": "Neden atılması gerektiği"
+    },
+    {
+      "step": 2,
+      "action": "Atılması gereken 2. adım",
+      "reason": "Sebebi açıklaması"
+    }
+  ]
+}`
+        },
+        {
+          role: "user",
+          content: combinedNotes
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 800
     });
 
-    // Clean up uploaded file
-    fs.unlinkSync(req.file.path);
-
-    res.json({ text: transcription.text });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    const jsonResponse = JSON.parse(completion.choices[0].message.content);
+    res.json(jsonResponse);
+  } catch (err) {
+    console.error("AI analiz hatası:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// AUDIO UPLOAD AND TRANSCRIBE
+
+
+
+
+//// Ses Dosyaları transkripsiyonu ve AI Analizi
+
 app.post('/api/customers/:customerId/upload-audio', authenticateToken, upload.single('audio'), async (req, res) => {
   try {
     const { customerId } = req.params;
@@ -1517,7 +1547,7 @@ app.post('/api/customers/:customerId/upload-audio', authenticateToken, upload.si
     }
 
     let transcribedText = '';
-    
+
     try {
       console.log(`Transkripsiyon başlatılıyor: ${req.file.path}`);
       const transcription = await global.openai.audio.transcriptions.create({
@@ -1532,7 +1562,7 @@ app.post('/api/customers/:customerId/upload-audio', authenticateToken, upload.si
       fs.unlinkSync(req.file.path);
       return res.status(500).json({ error: `OpenAI Transkript Hatası: ${transcriptionError.message}` });
     }
-    
+
     // Başarılı transkripsiyondan sonra dosyayı sil
     fs.unlinkSync(req.file.path);
 
@@ -1549,6 +1579,65 @@ app.post('/api/customers/:customerId/upload-audio', authenticateToken, upload.si
       [customerId]
     );
 
+    // 💡 AI ANALİZ BURADA BAŞLIYOR
+    if (global.openai && transcribedText.length > 50) {
+      try {
+        const completion = await global.openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: `Sen bir CRM asistanısın. Bu transkripti analiz et ve JSON formatında şunları ver:
+{
+  "sentiment": "pozitif/nötr/negatif",
+  "priority": "düşük/orta/yüksek",
+  "suggestions": "kısa öneriler",
+  "next_actions": "sonraki adımlar"
+}`
+            },
+            {
+              role: "user",
+              content: transcribedText
+            }
+          ],
+          max_tokens: 500
+        });
+
+        const analysis = JSON.parse(completion.choices[0].message.content);
+
+        await db.execute(
+          `INSERT INTO ai_analysis 
+           (note_id, sentiment, priority, suggestions, next_actions, confidence_score)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            newNoteId,
+            analysis.sentiment || 'nötr',
+            analysis.priority || 'orta',
+            analysis.suggestions || '',
+            analysis.next_actions || '',
+            0.85
+          ]
+        );
+
+        if (analysis.priority === 'yüksek') {
+          await db.execute(
+            `INSERT INTO tasks 
+             (customer_id, user_id, title, description, priority, due_date, created_by_ai, task_type)
+             VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 2 DAY), TRUE, 'ai_generated')`,
+            [
+              customerId,
+              userId,
+              'AI Önerisi: Acil Takip',
+              analysis.next_actions,
+              'high'
+            ]
+          );
+        }
+      } catch (aiError) {
+        console.error("AI analiz hatası:", aiError.message);
+      }
+    }
+
     // Yeni oluşturulan notun temel bilgilerini geri döndür
     const [note] = await db.execute(`
       SELECT n.*, u.username as author_name
@@ -1559,41 +1648,13 @@ app.post('/api/customers/:customerId/upload-audio', authenticateToken, upload.si
 
     res.status(201).json(note[0]);
   } catch (error) {
-    // Genel hataları yakala ve yüklenen dosyayı sil
     if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
+      fs.unlinkSync(req.file.path);
     }
     console.error("Genel ses yükleme hatası:", error);
     res.status(500).json({ error: error.message });
   }
-});}
-    }
-
-    // Save note with audio file
-    const [result] = await db.execute(
-      'INSERT INTO notes (customer_id, user_id, content, type, is_transcribed, audio_file_path) VALUES (?, ?, ?, ?, ?, ?)',
-      [customerId, userId, transcribedText || 'Ses dosyası yüklendi', 'audio', !!transcribedText, req.file.path]
-    );
-
-    // Update customer last interaction
-    await db.execute(
-      'UPDATE customers SET last_interaction = CURRENT_TIMESTAMP WHERE id = ?',
-      [customerId]
-    );
-
-    const [note] = await db.execute(`
-      SELECT n.*, u.username as author_name
-      FROM notes n
-      LEFT JOIN users u ON n.user_id = u.id
-      WHERE n.id = ?
-    `, [result.insertId]);
-
-    res.status(201).json(note[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
-
 
 
 
@@ -1723,12 +1784,10 @@ app.use((error, req, res, next) => {
 // ...
 // ... diğer tüm kodlarınız
 // ...
-
 initializeDB().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, 'localhost', () => {
     console.log(`🚀 Agency CRM Server running on port ${PORT}`);
     console.log(`✅ CORS İzni Verilen Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
     console.log(`🗄️  Database: ${dbConfig.host}:3306/${dbConfig.database}`);
   });
-    });
 });
