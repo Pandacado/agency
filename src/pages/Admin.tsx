@@ -75,6 +75,7 @@ export const Admin: React.FC = () => {
     }
   };
 
+  // --- GÜNCELLENMİŞ TEST FONKSİYONU ---
   const testIntegration = async (integration: string) => {
     toast.loading(`${integration} entegrasyonu test ediliyor...`, {
       style: {
@@ -84,6 +85,9 @@ export const Admin: React.FC = () => {
     });
     
     try {
+      // Önce ayarları kaydetmek, testin en güncel bilgilerle yapılmasını sağlar.
+      await axios.put('/api/settings', settings);
+      
       let endpoint = '';
       switch (integration) {
         case 'OpenAI':
@@ -91,6 +95,9 @@ export const Admin: React.FC = () => {
           break;
         case 'SMTP':
           endpoint = '/api/test/smtp';
+          break;
+        case 'Twilio':
+          endpoint = '/api/test/twilio';
           break;
         default:
           throw new Error('Desteklenmeyen entegrasyon');
@@ -109,7 +116,19 @@ export const Admin: React.FC = () => {
       });
     } catch (error: any) {
       toast.dismiss();
-      toast.error(error.response?.data?.error || `${integration} entegrasyonu başarısız`, {
+      
+      // Hata mesajını daha detaylı göstermek için geliştirilmiş blok
+      let errorMessage = `${integration} entegrasyonu başarısız.`;
+      if (error.response && error.response.data && error.response.data.error) {
+        // Sunucudan gelen özel ve detaylı hata mesajını kullan
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        // Ağ hatası gibi genel bir hata varsa onu göster
+        errorMessage = `Bir hata oluştu: ${error.message}`;
+      }
+
+      toast.error(errorMessage, {
+        duration: 6000, // Hata mesajının daha uzun süre ekranda kalmasını sağlar
         style: {
           borderRadius: '16px',
           background: '#EF4444',
@@ -119,6 +138,7 @@ export const Admin: React.FC = () => {
       });
     }
   };
+  // --- GÜNCELLEMENİN SONU ---
 
   const tabs = [
     { id: 'general', name: 'Genel Ayarlar', icon: Settings, color: 'from-blue-500 to-blue-600' },

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
-  Users, BarChart3, Calendar, CheckSquare, Settings, 
-  Menu, X, Sun, Moon, LogOut, User, FileText, Receipt
+   Users, BarChart3, Calendar, CheckSquare, Settings, 
+  Menu, X, Sun, Moon, LogOut, User, FileText, Receipt,
+  Sparkles, MessageSquare // Sparkles ikonunu import et
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -20,6 +21,8 @@ export const Layout: React.FC = () => {
     { name: 'Toplantılar', href: '/meetings', icon: Calendar },
     { name: 'Görevler', href: '/tasks', icon: CheckSquare },
     { name: 'Giderler', href: '/expenses', icon: Receipt },
+    { name: 'AI Müşteri Uzmanı', href: '/ai-uzman', icon: Sparkles },
+    { name: 'WhatsApp', href: '/whatsapp', icon: MessageSquare }, // YENİ MENÜ ELEMANI
     { name: 'Yönetim', href: '/admin', icon: Settings },
   ];
 

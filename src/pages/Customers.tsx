@@ -280,21 +280,26 @@ export const Customers: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="modern-card p-8 animate-slide-up" style={{ animationDelay: '100ms' }}>
-        <div className="flex flex-col lg:flex-row gap-6">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Ad, soyad, e-posta veya şirket ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="modern-input pl-14"
-              />
-            </div>
-          </div>
+  {/* Filters and Search */}
+<div className="modern-card p-8 animate-slide-up" style={{ animationDelay: '100ms' }}>
+  <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex-1">
+      <div className="relative">
+        <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+        
+        <input
+          type="text"
+          placeholder="Ad, soyad, e-posta veya şirket ara..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          // 1. Adım: pl-14 sınıfını buradan kaldırıyoruz
+          className="modern-input" 
+          // 2. Adım: Doğrudan style özelliğini ekliyoruz
+          style={{ paddingLeft: '3.5rem' }} 
+        />
+      </div>
+    </div>
+    
           
           <div className="flex gap-4">
             <select

@@ -12,6 +12,8 @@ import { Meetings } from './pages/Meetings';
 import { Tasks } from './pages/Tasks';
 import { Proposals } from './pages/Proposals';
 import { Expenses } from './pages/Expenses';
+import { AIMusteriUzmani } from './pages/AIMusteriUzmani'; // Yeni sayfayı import et
+import { WhatsApp } from './pages/WhatsApp'; // YENİ SAYFAYI IMPORT ET
 import { Admin } from './pages/Admin';
 import { Layout } from './components/Layout';
 
@@ -45,6 +47,8 @@ function App() {
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/proposals" element={<Proposals />} />
                 <Route path="/expenses" element={<Expenses />} />
+                <Route path="/ai-uzman" element={<AIMusteriUzmani />} />
+                <Route path="/whatsapp" element={<WhatsApp />} /> {/* YENİ ROTAYI EKLE */}
                 <Route path="/admin" element={<Admin />} />
               </Route>
             </Routes>
