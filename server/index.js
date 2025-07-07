@@ -939,6 +939,28 @@ app.get('/api/proposals', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/customers/:id/whatsapp-messages
+app.get('/api/customers/:id/whatsapp-messages', async (req, res) => {
+  const customerId = req.params.id;
+
+  if (!customerId) {
+    return res.status(400).json({ error: 'Müşteri ID gerekli' });
+  }
+
+  try {
+    const [messages] = await db.query(
+      'SELECT id, direction, message, created_at FROM whatsapp_messages WHERE customer_id = ? ORDER BY created_at ASC',
+      [customerId]
+    );
+
+    res.json(messages);
+  } catch (error) {
+    console.error('Mesajları çekerken hata:', error);
+    res.status(500).json({ error: 'Mesajlar alınamadı' });
+  }
+});
+
+
 app.get('/api/customers/:customerId/proposals', authenticateToken, async (req, res) => {
   try {
     const { customerId } = req.params;
