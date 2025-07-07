@@ -11,6 +11,22 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { randomBytes } from 'crypto';
+
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const filename = randomBytes(16).toString('hex') + ext;
+    cb(null, filename);
+  }
+});
+
+export const upload = multer({ storage });
+
 
 dotenv.config();
 
@@ -19,32 +35,31 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+app.use(express.json()); 
 
 // Middleware
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Portu 5173 olarak düzeltin
+  origin: function (origin, callback) {
+    // İzin verilen adreslerin listesi
+    const allowedOrigins = [
+      'http://localhost:5173', 
+      'http://192.168.1.103:5173', // Yerel IP adresiniz
+      process.env.FRONTEND_URL // Ortam değişkeni
+    ];
+    // Eğer gelen istek bu listeyse veya tanımsızsa (sunucu içi istekler gibi) izin ver
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// File upload configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'OK' });
 });
-const upload = multer({ storage });
 
 // Database connection
 const dbConfig = {
@@ -126,8 +141,8 @@ function initializeOpenAI() {
 }
 
 function initializeTwilio() {
-  const accountSid = globalSettings.twilio_account_sid || process.env.TWILIO_ACCOUNT_SID;
-  const authToken = globalSettings.twilio_auth_token || process.env.TWILIO_AUTH_TOKEN;
+  const accountSid = global.globalSettings.twilio_account_sid;
+  const authToken = global.globalSettings.twilio_auth_token;
   
   if (accountSid && authToken) {
     try {
@@ -506,29 +521,41 @@ const authenticateToken = (req, res, next) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+    console.log("Gelen login isteği:", req.body);
+
     if (!email || !password) {
-        return res.status(400).json({ error: 'E-posta ve şifre gerekli.' });
+      return res.status(400).json({ error: 'E-posta ve şifre gerekli.' });
     }
-    
-    const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
-    if (users.length === 0) {
+
+    // Veritabanından kullanıcıyı çek
+    const [userRows] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+    console.log("Kullanıcı verisi:", userRows);
+
+    if (userRows.length === 0) {
       return res.status(401).json({ error: 'Geçersiz kullanıcı bilgileri' });
     }
 
-    const user = users[0];
+    const user = userRows[0];
+
+    // Şifreyi kontrol et
     const isValidPassword = await bcrypt.compare(password, user.password);
-    
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Geçersiz kullanıcı bilgileri' });
     }
 
+    // Token üret
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, username: user.username },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        username: user.username
+      },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
 
+    // Yanıt dön
     res.json({
       token,
       user: {
@@ -539,29 +566,45 @@ app.post('/api/auth/login', async (req, res) => {
         avatar: user.avatar
       }
     });
+
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: 'Sunucu hatası oluştu.' });
   }
 });
 
+
+
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, email, password } = req.body;
-    
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Tüm alanlar gereklidir.' });
+    }
+
+    // Şifreyi hashle
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+
+    // Kullanıcıyı veritabanına kaydet
     const [result] = await db.execute(
       'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
       [username, email, hashedPassword]
     );
 
+    // Token üret
     const token = jwt.sign(
-      { id: result.insertId, email, role: 'user', username: username },
+      {
+        id: result.insertId,
+        email,
+        role: 'user',
+        username
+      },
       process.env.JWT_SECRET || 'your-secret-key',
       { expiresIn: '24h' }
     );
 
+    // Yanıt dön
     res.status(201).json({
       token,
       user: {
@@ -571,6 +614,7 @@ app.post('/api/auth/register', async (req, res) => {
         role: 'user'
       }
     });
+
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Bu e-posta adresi zaten kayıtlı.' });
@@ -580,6 +624,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
   }
 });
+
 
 
 // SERVICES ROUTES
@@ -1376,37 +1421,93 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// WHATSAPP ROUTES
+// 📌 Twilio Client Tanımı
+global.globalSettings = {
+  twilio_account_sid: process.env.TWILIO_ACCOUNT_SID,
+  twilio_auth_token: process.env.TWILIO_AUTH_TOKEN,
+  twilio_whatsapp_number: process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886'
+};
+
+
+// 📌 WhatsApp Template Listeleme
 app.get('/api/whatsapp/templates', authenticateToken, async (req, res) => {
   try {
     const [templates] = await db.execute('SELECT * FROM whatsapp_templates WHERE is_active = TRUE');
     res.json(templates);
   } catch (error) {
+    console.error('[TEMPLATE ERROR]', error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// 📌 Webhook Gelen Mesajları Karşılama
+app.use(express.urlencoded({ extended: true })); // Webhook body-parser
+
+app.post('/webhook/whatsapp', async (req, res) => {
+  try {
+    const { Body, From } = req.body;
+    console.log(`📩 Gelen Mesaj: "${Body}" - Kimden: ${From}`);
+
+    const phone = From.replace('whatsapp:+', '');
+    const [customers] = await db.execute(
+      'SELECT id FROM customers WHERE REPLACE(phone, " ", "") LIKE ?',
+      [`%${phone.slice(-9)}`]
+    );
+
+    if (customers.length > 0) {
+      await db.execute(
+        'INSERT INTO whatsapp_messages (customer_id, direction, message) VALUES (?, ?, ?)',
+        [customers[0].id, 'inbound', Body]
+      );
+    } else {
+      console.warn('❗ Müşteri bulunamadı, mesaj kayıt edilmedi.');
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('[WEBHOOK ERROR]', error);
+    res.sendStatus(500);
+  }
+});
+
+// 📌 WhatsApp'tan Müşteriye Mesaj Gönderme
 app.post('/api/whatsapp/send', authenticateToken, async (req, res) => {
   try {
     if (!global.twilioClient) {
-      return res.status(400).json({ error: 'WhatsApp entegrasyonu yapılandırılmamış' });
+      return res.status(400).json({ error: 'WhatsApp entegrasyonu yapılandırılmamış.' });
     }
 
     const { customer_id, message } = req.body;
-    
+    if (!customer_id || !message) {
+      return res.status(400).json({ error: 'Müşteri ID ve mesaj zorunludur.' });
+    }
+
     const [customers] = await db.execute('SELECT phone FROM customers WHERE id = ?', [customer_id]);
     if (customers.length === 0) {
-      return res.status(404).json({ error: 'Müşteri bulunamadı' });
+      return res.status(404).json({ error: 'Müşteri bulunamadı.' });
     }
 
     const customer = customers[0];
     const whatsappNumber = `whatsapp:+${customer.phone.replace(/[^\d]/g, '')}`;
-    
-    const twilioMessage = await global.twilioClient.messages.create({
-      body: message,
-      from: globalSettings.twilio_whatsapp_number || process.env.TWILIO_WHATSAPP_NUMBER,
-      to: whatsappNumber
-    });
+
+  try {
+  const twilioMessage = await global.twilioClient.messages.create({
+    body: message,
+    from: global.globalSettings.twilio_whatsapp_number,
+    to: whatsappNumber
+  });
+
+  await db.execute(
+    'INSERT INTO whatsapp_messages (customer_id, direction, message) VALUES (?, ?, ?)',
+    [customer_id, 'outbound', message]
+  );
+
+  res.status(200).json({ success: true, sid: twilioMessage.sid });
+
+} catch (error) {
+  console.error('Mesaj gönderim hatası:', error);
+  res.status(500).json({ error: 'Mesaj gönderilemedi.' });
+}
 
     // Save to database
     await db.execute(
@@ -1785,9 +1886,10 @@ app.use((error, req, res, next) => {
 // ... diğer tüm kodlarınız
 // ...
 initializeDB().then(() => {
-  app.listen(PORT, 'localhost', () => {
-    console.log(`🚀 Agency CRM Server running on port ${PORT}`);
-    console.log(`✅ CORS İzni Verilen Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
-    console.log(`🗄️  Database: ${dbConfig.host}:3306/${dbConfig.database}`);
-  });
+  app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Agency CRM Server running on port ${PORT}`);
+  console.log(`✅ CORS İzni Verilen Frontend URL: ${process.env.FRONTEND_URL}`);
+  console.log(`🗄️  Database: ${dbConfig.host}:3306/${dbConfig.database}`);
+});
+
 });
