@@ -38,19 +38,22 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json()); 
 
 // Middleware
-// Middleware
 app.use(cors({
   origin: function (origin, callback) {
     // İzin verilen adreslerin listesi
     const allowedOrigins = [
       'http://localhost:5173', 
+      'http://localhost:3000',
+      'http://127.0.0.1:5173',
       'http://192.168.1.103:5173', // Yerel IP adresiniz
       process.env.FRONTEND_URL // Ortam değişkeni
-    ];
+    ].filter(Boolean); // Remove any undefined values
+    
     // Eğer gelen istek bu listeyse veya tanımsızsa (sunucu içi istekler gibi) izin ver
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log(`CORS Error: Origin ${origin} not allowed. Allowed origins:`, allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
