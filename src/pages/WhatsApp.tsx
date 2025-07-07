@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from '../lib/axios'; // doğru path’e göre güncelle
-
+import axios from 'axios'; // Projenizdeki ana axios örneğini kullanın
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 import { 
   Search, Loader2, Send, MessageSquare, Phone, User, 
-  Building2, Clock, CheckCircle, AlertCircle 
+  Building2, Clock, CheckCircle
 } from 'lucide-react';
 
 interface Customer {
@@ -32,7 +31,6 @@ export const WhatsApp: React.FC = () => {
   const [filtered, setFiltered] = useState<Customer[]>([]);
   const [selected, setSelected] = useState<Customer | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
-  const [loading, setLoading] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState('');
@@ -42,13 +40,8 @@ export const WhatsApp: React.FC = () => {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-<<<<<<< HEAD
-        const res = await axios.get('/customers');
-
-=======
         const res = await axios.get('/api/customers');
->>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
-        // Sadece telefon numarası olan müşterileri göster
+        // Sadece telefon numarası olan müşterileri listele
         const customersWithPhone = res.data.filter((c: Customer) => c.phone && c.phone.trim() !== '');
         setCustomers(customersWithPhone);
         setFiltered(customersWithPhone);
@@ -70,44 +63,22 @@ export const WhatsApp: React.FC = () => {
 
   useEffect(() => {
     if (!selected) return;
-    
-<<<<<<< HEAD
-    const fetchMessages = async (customerId: number) => {
-  if (!customerId || isNaN(customerId)) {
-    console.warn("Geçersiz müşteri ID:", customerId);
-    return;
-  }
 
-  console.log("fetchMessages çağrıldı. Müşteri ID:", customerId);
-
-  setLoadingMessages(true);
-  try {
-    const response = await axios.get(`/api/customers/${customerId}/whatsapp-messages`);
-    setMessages(response.data);
-  } catch (error) {
-    console.error("Mesajlar çekilirken hata:", error);
-    toast.error('Mesajlar yüklenirken bir hata oluştu.');
-    setMessages([]);
-  } finally {
-    setLoadingMessages(false);
-  }
-};
-    fetchMessages(selected.id); 
-=======
     const fetchMessages = async () => {
-      setLoading(true);
+      if (!selected?.id) return;
+      setLoadingMessages(true);
       try {
-        const res = await axios.get(`/api/customers/${selected.id}/whatsapp-messages`);
-        setMessages(res.data);
+        const response = await axios.get(`/api/customers/${selected.id}/whatsapp-messages`);
+        setMessages(response.data);
       } catch (error) {
-        console.error('Messages fetch error:', error);
-        toast.error('Mesajlar yüklenirken hata oluştu');
+        console.error("Mesajlar çekilirken hata:", error);
+        toast.error('Mesajlar yüklenirken bir hata oluştu.');
+        setMessages([]);
       } finally {
-        setLoading(false);
+        setLoadingMessages(false);
       }
     };
     fetchMessages();
->>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
   }, [selected]);
 
   useEffect(() => {
@@ -127,18 +98,13 @@ export const WhatsApp: React.FC = () => {
     
     setSending(true);
     try {
-<<<<<<< HEAD
-      const response = await axios.post('/send-message', {
-  to: `whatsapp:${selected.phone}`,
-  body: data.message,
-});
-=======
-      const response = await axios.post('/api/whatsapp/send', {
+      // Backend'deki doğru endpoint'e istek atılıyor
+      await axios.post('/api/whatsapp/send', {
         customer_id: selected.id,
         message: data.message,
       });
->>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
 
+      // Mesajı anında arayüze ekle
       setMessages((prev) => [
         ...prev,
         {
@@ -148,14 +114,7 @@ export const WhatsApp: React.FC = () => {
           created_at: new Date().toISOString(),
         },
       ]);
-<<<<<<< HEAD
-const handleCustomerSelect = (customer: Customer) => {
-  console.log("Seçilen müşteri:", customer); // Debug için
-  setSelected(customer);
-};
-=======
-
->>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
+      
       toast.success(`Mesaj ${selected.first_name} ${selected.last_name}'a gönderildi`, {
         icon: '📱',
         style: { 
@@ -174,6 +133,11 @@ const handleCustomerSelect = (customer: Customer) => {
       setSending(false);
     }
   };
+  
+    const handleCustomerSelect = (customer: Customer) => {
+      setSelected(customer);
+    };
+
 
   return (
     <div className="space-y-8 font-poppins">
@@ -200,7 +164,7 @@ const handleCustomerSelect = (customer: Customer) => {
       {/* WhatsApp Interface */}
       <div className="modern-card overflow-hidden animate-slide-up" style={{ animationDelay: '100ms' }}>
         <div className="flex h-[600px]">
-      {/* Müşteriler Paneli */}
+          {/* Müşteriler Paneli */}
           <div className="w-1/3 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white flex items-center">
@@ -230,7 +194,7 @@ const handleCustomerSelect = (customer: Customer) => {
                 filtered.map((c) => (
                   <div
                     key={c.id}
-                    onClick={() => setSelected(c)}
+                    onClick={() => handleCustomerSelect(c)}
                     className={`p-4 rounded-2xl cursor-pointer mb-3 transition-all duration-300 hover:scale-105 ${
                       selected?.id === c.id 
                         ? 'bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900 dark:to-emerald-900 border-2 border-green-300 dark:border-green-600 shadow-lg' 
@@ -272,10 +236,10 @@ const handleCustomerSelect = (customer: Customer) => {
             </div>
           </div>
 
-      {/* Mesajlar Paneli */}
+          {/* Mesajlar Paneli */}
           <div className="w-2/3 flex flex-col bg-white dark:bg-gray-900">
-        {selected ? (
-          <>
+            {selected ? (
+              <>
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-gray-800 dark:to-gray-700">
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center shadow-lg">
@@ -301,52 +265,52 @@ const handleCustomerSelect = (customer: Customer) => {
                       </div>
                     </div>
                   </div>
-            </div>
+                </div>
 
                 <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
-              {loading ? (
+                  {loadingMessages ? (
                     <div className="flex flex-col justify-center items-center h-full">
                       <Loader2 className="h-12 w-12 animate-spin text-green-500 mb-4" />
                       <p className="text-gray-500 dark:text-gray-400 font-medium">Mesajlar yükleniyor...</p>
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="flex flex-col justify-center items-center h-full text-center">
-                  <MessageSquare className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
-                  <h3 className="text-xl font-bold text-gray-500 dark:text-gray-400 mb-2">
-                    Henüz mesaj yok
-                  </h3>
-                  <p className="text-gray-400 dark:text-gray-500">
-                    {selected.first_name} ile sohbeti başlatmak için aşağıdan mesaj gönderin
-                  </p>
-                </div>
-              ) : (
-                messages.map((msg) => (
-                  <div
-                    key={msg.id}
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="flex flex-col justify-center items-center h-full text-center">
+                      <MessageSquare className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
+                      <h3 className="text-xl font-bold text-gray-500 dark:text-gray-400 mb-2">
+                        Henüz mesaj yok
+                      </h3>
+                      <p className="text-gray-400 dark:text-gray-500">
+                        {selected.first_name} ile sohbeti başlatmak için aşağıdan mesaj gönderin
+                      </p>
+                    </div>
+                  ) : (
+                    messages.map((msg) => (
+                      <div
+                        key={msg.id}
                         className={`max-w-lg p-4 rounded-3xl shadow-lg animate-slide-up ${
-                      msg.direction === 'outbound'
+                          msg.direction === 'outbound'
                             ? 'ml-auto bg-gradient-to-r from-green-500 to-emerald-600 text-white'
                             : 'mr-auto bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-600'
-                    }`}
-                  >
+                        }`}
+                      >
                         <p className="font-medium leading-relaxed">{msg.message}</p>
                         <div className="flex items-center justify-end mt-2 space-x-2">
                           <Clock className="h-3 w-3 opacity-60" />
                           <p className="text-xs opacity-60">
                             {new Date(msg.created_at).toLocaleTimeString('tr-TR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                           </p>
                           {msg.direction === 'outbound' && (
                             <CheckCircle className="h-3 w-3 opacity-60" />
                           )}
                         </div>
-                  </div>
-                ))
-              )}
-              <div ref={bottomRef} />
-            </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={bottomRef} />
+                </div>
 
                 <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                   <form onSubmit={handleSubmit(sendMessage)} className="flex space-x-4">
@@ -385,8 +349,8 @@ const handleCustomerSelect = (customer: Customer) => {
                     </button>
                   </form>
                 </div>
-          </>
-        ) : (
+              </>
+            ) : (
               <div className="flex flex-col items-center justify-center h-full text-center p-8">
                 <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-float">
                   <MessageSquare className="h-12 w-12 text-white" />
@@ -394,21 +358,11 @@ const handleCustomerSelect = (customer: Customer) => {
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
                   WhatsApp Sohbeti Başlatın
                 </h3>
-                <p className="text-lg text-gray-500 dark:text-gray-400 mb-6">
-                  Müşterilerinizle iletişim kurmak için sol panelden bir müşteri seçin
+                <p className="text-lg text-gray-500 dark:text-gray-400">
+                  Müşterilerinizle iletişim kurmak için sol panelden bir müşteri seçin.
                 </p>
-                {customers.length === 0 && (
-                  <div className="p-4 bg-amber-50 dark:bg-amber-900 rounded-2xl border border-amber-200 dark:border-amber-700">
-                    <div className="flex items-center">
-                      <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mr-2" />
-                      <p className="text-amber-800 dark:text-amber-200 font-medium">
-                        WhatsApp kullanmak için müşterilerinizin telefon numaralarını eklemeyi unutmayın
-                      </p>
-                    </div>
-                  </div>
-                )}
-          </div>
-        )}
+              </div>
+            )}
           </div>
         </div>
       </div>
