@@ -42,8 +42,12 @@ export const WhatsApp: React.FC = () => {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
+<<<<<<< HEAD
         const res = await axios.get('/customers');
 
+=======
+        const res = await axios.get('/api/customers');
+>>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
         // Sadece telefon numarası olan müşterileri göster
         const customersWithPhone = res.data.filter((c: Customer) => c.phone && c.phone.trim() !== '');
         setCustomers(customersWithPhone);
@@ -67,6 +71,7 @@ export const WhatsApp: React.FC = () => {
   useEffect(() => {
     if (!selected) return;
     
+<<<<<<< HEAD
     const fetchMessages = async (customerId: number) => {
   if (!customerId || isNaN(customerId)) {
     console.warn("Geçersiz müşteri ID:", customerId);
@@ -88,6 +93,21 @@ export const WhatsApp: React.FC = () => {
   }
 };
     fetchMessages(selected.id); 
+=======
+    const fetchMessages = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get(`/api/customers/${selected.id}/whatsapp-messages`);
+        setMessages(res.data);
+      } catch (error) {
+        console.error('Messages fetch error:', error);
+        toast.error('Mesajlar yüklenirken hata oluştu');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMessages();
+>>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
   }, [selected]);
 
   useEffect(() => {
@@ -107,10 +127,17 @@ export const WhatsApp: React.FC = () => {
     
     setSending(true);
     try {
+<<<<<<< HEAD
       const response = await axios.post('/send-message', {
   to: `whatsapp:${selected.phone}`,
   body: data.message,
 });
+=======
+      const response = await axios.post('/api/whatsapp/send', {
+        customer_id: selected.id,
+        message: data.message,
+      });
+>>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
 
       setMessages((prev) => [
         ...prev,
@@ -121,10 +148,14 @@ export const WhatsApp: React.FC = () => {
           created_at: new Date().toISOString(),
         },
       ]);
+<<<<<<< HEAD
 const handleCustomerSelect = (customer: Customer) => {
   console.log("Seçilen müşteri:", customer); // Debug için
   setSelected(customer);
 };
+=======
+
+>>>>>>> 4f1f3a6b4334dcf4a2710f241a410b5e562cbe83
       toast.success(`Mesaj ${selected.first_name} ${selected.last_name}'a gönderildi`, {
         icon: '📱',
         style: { 
