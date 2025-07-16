@@ -45,7 +45,7 @@ app.use(cors({
       'http://localhost:5173', 
       'http://localhost:3000',
       'http://127.0.0.1:5173',
-      'http://192.168.1.103:5173', // Yerel IP adresiniz
+      'http://192.168.1.101:5173', // Yerel IP adresiniz
       process.env.FRONTEND_URL // Ortam değişkeni
     ].filter(Boolean); // Remove any undefined values
     
